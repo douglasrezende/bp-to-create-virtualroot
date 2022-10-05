@@ -1,0 +1,66 @@
+<process name = "CREATE_VIRTUALROOT_XAPI_bp"> 
+  <rule name="hasUser">
+    <condition>number(/ProcessData/count/text()) &lt; number(/ProcessData/totalMessageId/text())</condition>
+  </rule>
+
+  <sequence name="CX">
+    <assign to="mailboxPath">/DOUGLAS/REZENDE</assign>
+    <operation name="PutTAGInDocument">
+      <participant name="PutTagInNonXMLDocumentAndSendToPrimaryDocument"/>
+      <output message="JavaTaskInputMessage">
+        <assign to="." from="*"></assign>
+        <assign to="javaSrc">import com.sterlingcommerce.woodstock.workflow.Document;   import java.io.InputStream;   import java.io.InputStreamReader;   import java.io.BufferedReader; import java.io.IOException;    Document srcDoc = wfc.getPrimaryDocument();    InputStream is = srcDoc.getInputStream();    BufferedReader br = new BufferedReader(new InputStreamReader(is));    try{    int lineNumber = 1;    StringBuffer contents = new StringBuffer();       String aStr = &quot;&quot;;     contents.append(&quot;&lt;root&gt;&quot;+ System.getProperty(&quot;line.separator&quot;));    while ((aStr = br.readLine()) != null) {      aStr = aStr.trim();     if(aStr == null || aStr.isEmpty()){     log.log(&quot;CAIXA_RESUBMIT_MESSAGEID: NAO FOI IDENTIFICADO VALOR NA LINHA NUMERO: &quot;+lineNumber);   }else{      contents.append(&quot;&lt;user&gt;&quot;+aStr+&quot;&lt;/user&gt;&quot;);                contents.append(System.getProperty(&quot;line.separator&quot;));     }   lineNumber++;    }    contents.append(&quot;&lt;/root&gt;&quot;+ System.getProperty(&quot;line.separator&quot;));   srcDoc.setBody(contents.toString().getBytes());     wfc.setAdvancedStatus(&quot;Finish!&quot;);     wfc.setBasicStatus(000);     wfc.putPrimaryDocument(srcDoc);  }catch(NullPointerException ex){  log.log(&quot;CAIXA_RESUBMIT_MESSAGEID: &quot; + ex.getMessage());     }catch(IOException e){  log.log(&quot;CAIXA_RESUBMIT_MESSAGEID: &quot; + e.getMessage());     }finally{    br.close();  } return &quot;000&quot;;</assign>
+      </output>
+      <input message="inmsg">
+        <assign to="." from="*"></assign>
+      </input>
+    </operation>
+
+    <assign name="Assign" to="count">0</assign>
+    <assign name="Assign" to="." from="DocToDOM(PrimaryDocument)"></assign>
+    <assign name="Assign" to="totalMessageId" from="count(/ProcessData/root/user/text())"></assign>
+    <sequence name="loop">
+      <choice>
+        <select>
+          <case ref="hasUser" activity="0"/>
+        </select>
+
+        <sequence name="0">
+          <assign name="Assign" to="count" from="count + 1"></assign>
+          <assign name="Assign" to="user" from="/ProcessData/root/user[number(/ProcessData/count/text())]/text()"></assign>
+          <operation name="CreateXMLFileToXAPI">
+            <participant name="CreateXMLFile"/>
+            <output message="JavaTaskInputMessage">
+              <assign to="." from="*"></assign>
+              <assign to="javaSrc">import com.sterlingcommerce.woodstock.workflow.Document;            import java.io.InputStream;               import java.io.InputStreamReader;               import java.io.BufferedReader;                Document document = new Document();               Document srcDoc = wfc.getPrimaryDocument();             String mailBoxPath = (String)wfc.getWFContent(&quot;mailboxPath&quot;);           String user = (String)wfc.getWFContent(&quot;user&quot;);          String xml =&quot;&lt;VirtualRoot Path=\&quot;&quot;+ mailBoxPath +  &quot;\&quot; User=\&quot;&quot;+ user + &quot;\&quot;/&gt;&quot;;        document = wfc.newDocument();            document.setBody(xml.toString().getBytes());                 wfc.setAdvancedStatus(&quot;Finish!&quot;);             wfc.setBasicStatus(000);                      wfc.putPrimaryDocument(document);           return &quot;000&quot;;</assign>
+            </output>
+            <input message="inmsg">
+              <assign to="." from="*"></assign>
+            </input>
+          </operation>
+
+          <operation name="CreateMailBox">
+            <participant name="XAPIService"/>
+            <output message="XAPIServiceTypeInputMessage">
+              <assign to="." from="*"></assign>
+              <assign to="api">createVirtualRoot</assign>
+              <assign to="UserId">admin</assign>
+            </output>
+            <input message="inmsg">
+              <assign to="." from="*"></assign>
+            </input>
+          </operation>
+
+          <repeat name="repeatloop" ref="loop"/>
+
+        </sequence>
+      </choice>
+    </sequence>
+    <onFault>
+      <sequence>
+        <assign to="error">ERROR</assign>
+      </sequence>
+    </onFault>
+  </sequence>
+</process>
+
